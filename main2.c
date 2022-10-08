@@ -106,7 +106,7 @@ void rotationMatrix(struct v3 i, struct v3 *o, struct v3 r) {
     + i.z*cosf(r.y)*cosf(r.z);
 }
 
-void projectionMatrix(struct v3 i, struct v3 *o, float aspectRatio, float fovTan) {
+void projectionMatrix(struct v3 i, struct v3 *o) {
   float x = i.x;
   float y = i.y;
   float z = i.z;
@@ -160,9 +160,6 @@ void drawLine(struct v2 a, struct v2 b, char c) {
 }
 
 int main() {
-  float fNear = 0.1f, fFar = 1000.0f, fov = 90.0f, aspectRatio = (float)height/(float)width;
-  float fovTan = 1.0f / tanf(fov * 0.5f / 180.0f * M_PI);
-
   buffer = malloc(width*sizeof(char*));
   for (int i = 0; i < width; i++)
     buffer[i] = malloc(height*sizeof(char));
@@ -210,9 +207,9 @@ int main() {
         triTranslated.p[1].y = triRotated.p[1].y + cam.y + cubes[i].pos.y;
         triTranslated.p[2].y = triRotated.p[2].y + cam.y + cubes[i].pos.y;
 
-        projectionMatrix(triTranslated.p[0], triProjected.p, aspectRatio, fovTan);
-        projectionMatrix(triTranslated.p[1], triProjected.p+1, aspectRatio, fovTan);
-        projectionMatrix(triTranslated.p[2], triProjected.p+2, aspectRatio, fovTan);
+        projectionMatrix(triTranslated.p[0], triProjected.p);
+        projectionMatrix(triTranslated.p[1], triProjected.p+1);
+        projectionMatrix(triTranslated.p[2], triProjected.p+2);
 
         //struct v2 p0 = (v2){(triProjected.p[0].x+1.0f)*0.5f*width, (triProjected.p[0].y+1.0f)*0.5f*height};
         //struct v2 p1 = (v2){(triProjected.p[1].x+1.0f)*0.5f*width, (triProjected.p[1].y+1.0f)*0.5f*height};
