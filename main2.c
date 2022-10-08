@@ -235,6 +235,7 @@ int main() {
       printf("\033[%d;%dH %d:rotation = [%f, %f, %f]", 2*i+5, width+2, i, cubes[i].r.x, cubes[i].r.y, cubes[i].r.z);
     }
 
+    // Drawing
     int scaledHeight = (int)((float)height*heightScale);
     printf("\x1b[H");
     for (int y = 0; y <= scaledHeight; y++) {
@@ -249,6 +250,7 @@ int main() {
         for (int i = 0; i < width-1; i++)
           putchar('#');
     }
+    putchar('\n');
 
     // Input
     if (keyIsPressed(XK_W))
@@ -294,7 +296,6 @@ int main() {
 
     if (keyIsPressed(XK_Escape))
       time = -1.0f;
-    printf("behold:%f", camD.z);
     time += 0.01f;
   }
 
