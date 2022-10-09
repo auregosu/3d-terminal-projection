@@ -4,10 +4,13 @@
 #include <string.h>
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
-#define CUB_NUM 5
+#define bool unsigned char
+#define false 0
+#define true !false
+#define CUB_NUM 1
 
-int width = 30;
-int height = 30;
+int width = 50;
+int height = 50;
 float heightScale = 0.45f;
 char **buffer;
 float **projMat;
@@ -33,6 +36,28 @@ typedef struct iv2 {
 typedef struct v3 {
   float x,y,z;
 } v3;
+
+v3 v3sum(struct v3 a, struct v3 b, char sign) {
+  struct v3 c;
+  if (sign == '-') {
+    return (v3){
+      a.x - b.x,
+      a.y - b.y,
+      a.z - b.z};
+  } else {
+    return (v3){
+      a.x + b.x,
+      a.y + b.y,
+      a.z + b.z};
+  }
+}
+
+v3 v3sumf(struct v3 a, float b) {
+  return (v3){
+    a.x + b,
+    a.y + b,
+    a.z + b};
+}
 
 typedef struct triangle {
   struct v3 p[3];
@@ -80,17 +105,9 @@ void populateCube(struct cube* cb) {
     (triangle){(v3){1, 0, 1}, (v3){0, 0, 0}, (v3){1, 0, 0}}
   };
   for (int i = 0; i < 12; i++) {
-    cb->mesh.triangles[i].p[0].x -= 0.5f;
-    cb->mesh.triangles[i].p[0].y -= 0.5f;
-    cb->mesh.triangles[i].p[0].z -= 0.5f;
-
-    cb->mesh.triangles[i].p[1].x -= 0.5f;
-    cb->mesh.triangles[i].p[1].y -= 0.5f;
-    cb->mesh.triangles[i].p[1].z -= 0.5f;
-
-    cb->mesh.triangles[i].p[2].x -= 0.5f;
-    cb->mesh.triangles[i].p[2].y -= 0.5f;
-    cb->mesh.triangles[i].p[2].z -= 0.5f;
+    cb->mesh.triangles[i].p[0] = v3sumf(cb->mesh.triangles[i].p[0], -0.5f);
+    cb->mesh.triangles[i].p[1] = v3sumf(cb->mesh.triangles[i].p[1], -0.5f);
+    cb->mesh.triangles[i].p[2] = v3sumf(cb->mesh.triangles[i].p[2], -0.5f);
   }
 }
 
@@ -123,6 +140,16 @@ float  distanceBetween(struct v3 a, struct v3 b) {
   return sqrtf(dif.x*dif.x + dif.y*dif.y + dif.z*dif.z);
 }
 
+struct v3 crossProduct(struct v3 a, struct v3 b, struct v3 c) {
+  struct v3 line1, line2, d;
+  line1 = v3sum(a, c, '-');
+  line2 = v3sum(b, c, '-');
+  return (v3){
+    line1.y * line2.z - line1.z * line2.y,
+    line1.z * line2.x - line1.x * line2.z,
+    line1.x * line2.y - line1.y * line2.x};
+}
+
 void putPixel (int x, int y, char c) {
   y = (int)((float)y*heightScale);
   if (x >= 0 && x < width && y >= 0 && y < height)
@@ -136,9 +163,7 @@ void drawLine(struct v2 a, struct v2 b, char c) {
   float error = dif.x + dif.y;
 
   float hypothenuse = sqrtf(dif.x*dif.x + dif.y*dif.y);
-  int h = (int)hypothenuse;
-  unsigned int step = h >> 1;
-  printf("%d", step);
+  unsigned int step = (int)(hypothenuse*0.8f);
   while (step) {
     putPixel(a.x, a.y, c);
     if (a.x == b.x && a.y == b.y)
@@ -157,6 +182,36 @@ void drawLine(struct v2 a, struct v2 b, char c) {
         a.y += sy;
     }
     step--;
+  }
+}
+
+float crossProduct2(struct v2 a, struct v2 b) {
+  return a.x * b.y - a.y * b.x;
+}
+
+void drawTriangle(struct v2 p1, struct v2 p2, struct v2 p3, char c) {
+  int maxX = (int)fmax(p1.x, fmax(p2.x, p3.x));
+  int minX = (int)fmin(p1.x, fmin(p2.x, p3.x));
+  int maxY = (int)fmax(p1.y, fmax(p2.y, p3.y));
+  int minY = (int)fmin(p1.y, fmin(p2.y, p3.y));
+
+  struct v2 vs1 = (v2){p2.x - p1.x, p2.y - p1.y};
+  struct v2 vs2 = (v2){p3.x - p1.x, p3.y - p1.y};
+
+  for (int x = minX; x <= maxX; x++)
+  {
+    for (int y = minY; y <= maxY; y++)
+    {
+      struct v2 q = (v2){x - p1.x, y - p1.y};
+
+      float s = (float)crossProduct2(q, vs2) / crossProduct2(vs1, vs2);
+      float t = (float)crossProduct2(vs1, q) / crossProduct2(vs1, vs2);
+
+      if ( (s >= 0) && (t >= 0) && (s + t <= 1))
+      {
+        putPixel(x, y, c);
+      }
+    }
   }
 }
 
@@ -196,52 +251,67 @@ int main() {
         buffer[x][y] = ' ';
     }
 
-    printf("\033[%d;%dH cam:position = [%f, %f, %f]", 1, width+2, cam.x, cam.y, cam.z);
-    printf("\033[%d;%dH cam:rotation = [%f, %f, %f]", 2, width+2, camR.x, camR.y, camR.z);
+    printf("\033[%d;%dH cam:position = [%.2f, %.2f, %.2f]", 1, width+2, cam.x, cam.y, cam.z);
+    printf("\033[%d;%dH cam:rotation = [%.2f, %.2f, %.2f]", 2, width+2, camR.x, camR.y, camR.z);
 
     int k = 0;
     for (int i = 0; i < CUB_NUM; i++) {
       for (int j = 0; j < 12; j++) {
-        //putchar('a');
-
         struct triangle triProjected, triTranslated, triRotated;
 
         rotationMatrix(cubes[i].mesh.triangles[j].p[0], triRotated.p, cubes[i].r);
         rotationMatrix(cubes[i].mesh.triangles[j].p[1], triRotated.p+1, cubes[i].r);
         rotationMatrix(cubes[i].mesh.triangles[j].p[2], triRotated.p+2, cubes[i].r);
 
-        triTranslated.p[0].z = triRotated.p[0].z + cam.z + cubes[i].pos.z;
-        triTranslated.p[1].z = triRotated.p[1].z + cam.z + cubes[i].pos.z;
-        triTranslated.p[2].z = triRotated.p[2].z + cam.z + cubes[i].pos.z;
+        triTranslated.p[0] = v3sum(triRotated.p[0], v3sum(cam, cubes[i].pos, '+'), '+');
+        triTranslated.p[1] = v3sum(triRotated.p[1], v3sum(cam, cubes[i].pos, '+'), '+');
+        triTranslated.p[2] = v3sum(triRotated.p[2], v3sum(cam, cubes[i].pos, '+'), '+');
 
-        triTranslated.p[0].x = triRotated.p[0].x + cam.x + cubes[i].pos.x;
-        triTranslated.p[1].x = triRotated.p[1].x + cam.x + cubes[i].pos.x;
-        triTranslated.p[2].x = triRotated.p[2].x + cam.x + cubes[i].pos.x;
+        struct v3 normal = crossProduct(triTranslated.p[0], triTranslated.p[1], triTranslated.p[2]);
+        float length = sqrtf(normal.x*normal.x + normal.y*normal.y + normal.z*normal.z);
+        normal.x /= length; normal.y /= length; normal.z /= length;
+        float dotProduct = normal.x * triTranslated.p[0].x +
+                          normal.y * triTranslated.p[0].y +
+                          normal.z * triTranslated.p[0].z;
 
-        triTranslated.p[0].y = triRotated.p[0].y + cam.y + cubes[i].pos.y;
-        triTranslated.p[1].y = triRotated.p[1].y + cam.y + cubes[i].pos.y;
-        triTranslated.p[2].y = triRotated.p[2].y + cam.y + cubes[i].pos.y;
+        if (dotProduct < 0.0f) {
+          projectionMatrix(triTranslated.p[0], triProjected.p, projMat);
+          projectionMatrix(triTranslated.p[1], triProjected.p+1, projMat);
+          projectionMatrix(triTranslated.p[2], triProjected.p+2, projMat);
 
-        projectionMatrix(triTranslated.p[0], triProjected.p, projMat);
-        projectionMatrix(triTranslated.p[1], triProjected.p+1, projMat);
-        projectionMatrix(triTranslated.p[2], triProjected.p+2, projMat);
+          struct v2 p0 = (v2){(triProjected.p[0].x+1.0f)*0.5f*width, (triProjected.p[0].y+1.0f)*0.5f*height};
+          struct v2 p1 = (v2){(triProjected.p[1].x+1.0f)*0.5f*width, (triProjected.p[1].y+1.0f)*0.5f*height};
+          struct v2 p2 = (v2){(triProjected.p[2].x+1.0f)*0.5f*width, (triProjected.p[2].y+1.0f)*0.5f*height};
 
-        struct v2 p0 = (v2){(triProjected.p[0].x+1.0f)*0.5f*width, (triProjected.p[0].y+1.0f)*0.5f*height};
-        struct v2 p1 = (v2){(triProjected.p[1].x+1.0f)*0.5f*width, (triProjected.p[1].y+1.0f)*0.5f*height};
-        struct v2 p2 = (v2){(triProjected.p[2].x+1.0f)*0.5f*width, (triProjected.p[2].y+1.0f)*0.5f*height};
+          //printf("\033[%d;%dH [%f, %f, %f] -> [%f, %f]", j+1, width+1, triTranslated.p[0].x, triTranslated.p[0].y, triTranslated.p[0].z, p0.x, p0.y);
 
-        //printf("\033[%d;%dH [%f, %f, %f] -> [%f, %f]", j+1, width+1, triTranslated.p[0].x, triTranslated.p[0].y, triTranslated.p[0].z, p0.x, p0.y);
-
-        drawLine(p0, p1, '`');
-        drawLine(p1, p2, '\'');
-        drawLine(p2, p0, '^');
-        putPixel(p0.x, p0.y, 'A'+(k++)-25);
-        putPixel(p1.x, p1.y, 'A'+(k++)-25);
-        putPixel(p2.x, p2.y, 'A'+(k++)-25);
+          short light = (int)(dotProduct*-11.0f);
+          switch (light) {
+            case 0: drawTriangle(p0, p1, p2, '@'); break;
+            case 1: drawTriangle(p0, p1, p2, '$'); break;
+            case 2: drawTriangle(p0, p1, p2, 'M'); break;
+            case 3: drawTriangle(p0, p1, p2, 'X'); break;
+            case 4: drawTriangle(p0, p1, p2, '?'); break;
+            case 5: drawTriangle(p0, p1, p2, 'x'); break;
+            case 6: drawTriangle(p0, p1, p2, '+'); break;
+            case 7: drawTriangle(p0, p1, p2, '='); break;
+            case 8: drawTriangle(p0, p1, p2, '-'); break;
+            case 9: drawTriangle(p0, p1, p2, ';'); break;
+            case 10:drawTriangle(p0, p1, p2, ':'); break;
+            case 11:drawTriangle(p0, p1, p2, ','); break;
+            default:drawTriangle(p0, p1, p2, '.'); break;
+          }
+          //drawLine(p0, p1, '#');
+          //drawLine(p1, p2, '#');
+          //drawLine(p2, p0, '#');
+          putPixel(p0.x, p0.y, '#');
+          putPixel(p1.x, p1.y, '#');
+          putPixel(p2.x, p2.y, '#');
+        }
       }
       k = 0;
-      printf("\033[%d;%dH %d:position = [%f, %f, %f]", 2*i+4, width+2, i, cubes[i].pos.x, cubes[i].pos.y, cubes[i].pos.z);
-      printf("\033[%d;%dH %d:rotation = [%f, %f, %f]", 2*i+5, width+2, i, cubes[i].r.x, cubes[i].r.y, cubes[i].r.z);
+      printf("\033[%d;%dH %d:position = [%.2f, %.2f, %.2f]", 2*i+4, width+2, i, cubes[i].pos.x, cubes[i].pos.y, cubes[i].pos.z);
+      printf("\033[%d;%dH %d:rotation = [%.2f, %.2f, %.2f]", 2*i+5, width+2, i, cubes[i].r.x, cubes[i].r.y, cubes[i].r.z);
     }
 
     // Drawing
